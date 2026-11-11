@@ -124,6 +124,14 @@ el("copy-notebook-id")?.addEventListener("click", () => {
     feedback("Notebook ID: " + selectedId);
   });
 });
+el("copy-ai-prompt")?.addEventListener("click", () => {
+  const text = el("ai-prompt-text")?.textContent || "";
+  navigator.clipboard.writeText(text).then(() => {
+    feedback("Copied AI prompt specification to clipboard!");
+  }).catch(() => {
+    feedback("Please select and copy the prompt text above.");
+  });
+});
 el("file").addEventListener("change", async event => {
   const file = event.target.files[0];
   if (!file) return;

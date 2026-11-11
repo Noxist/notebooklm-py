@@ -24,7 +24,94 @@ button,input{font:inherit;margin:.25rem;padding:.5rem}button{cursor:pointer}td,t
 <textarea id="editor" spellcheck="false">{"jobs":[{"id":"audio-example-001","type":"audio","notebook_id":"REPLACE_WITH_NOTEBOOK_ID","title":"Weekly overview","prompt":"Summarize the central ideas","language":"en","when":"now"}]}</textarea>
 <div><button id="validate">Validate</button><button id="dry">Dry run</button><button id="submit">Submit batch</button><button id="refresh">Refresh status</button></div>
 <pre id="feedback" role="status" aria-live="polite">Ready. No jobs submitted.</pre>
-<details><summary>Supported types and options</summary><pre id="schema">Loading…</pre></details>
+<details><summary>Supported types and options (JSON raw schema)</summary><pre id="schema">Loading…</pre></details>
+<details id="ai-guide-details" style="margin:1rem 0;padding:.75rem;background:#fff;border:1px solid #ccd6dc;border-radius:6px">
+<summary style="font-weight:bold;cursor:pointer">📋 AI Prompt & JSON Format Specification (Click to open & copy for ChatGPT / Claude / Gemini)</summary>
+<div style="margin-top:.75rem">
+  <p style="margin:0 0 .5rem 0">Copy this specification and paste it into ChatGPT, Claude, or Gemini to have the AI write your batch files for you:</p>
+  <button id="copy-ai-prompt" type="button" style="font-weight:bold">Copy AI Prompt Specification to Clipboard</button>
+  <pre id="ai-prompt-text" style="background:#f0f4f8;padding:1rem;border-radius:4px;overflow-x:auto;font-size:13px;max-height:360px">You are generating a JSON batch file for NotebookLM Batch Studio.
+
+Output only valid JSON with this structure:
+{
+  "jobs": [
+    {
+      "id": "unique-kebab-case-id-001",
+      "type": "<type>",
+      "notebook_id": "REPLACE_WITH_NOTEBOOK_ID",
+      "title": "<descriptive title>",
+      "prompt": "<optional instructions>",
+      "language": "en",
+      "when": "now",
+      "options": {}
+    }
+  ]
+}
+
+Supported Types and Options:
+1. audio
+   - options.audio_format: "DEEP_DIVE" | "BRIEF" | "CRITIQUE" | "DEBATE"
+   - options.audio_length: "SHORT" | "DEFAULT" | "LONG"
+   - when: "now" | "later"
+
+2. video
+   - format: "EXPLAINER" | "BRIEF" | "CINEMATIC" | "SHORT"
+   - options.video_style: "AUTO_SELECT" | "CUSTOM" | "CLASSIC" | "WHITEBOARD" | "KAWAII" | "ANIME" | "WATERCOLOR" | "RETRO_PRINT" | "HERITAGE" | "PAPER_CRAFT"
+   - options.style_prompt: "string (only if video_style is CUSTOM)"
+   - when: "now" | "later" (cinematic does not support later)
+
+3. cinematic_video
+   - prompt: "story prompt"
+   - when: "now" (Generate Later unsupported)
+
+4. report
+   - format: "BRIEFING_DOC" | "STUDY_GUIDE" | "BLOG_POST" | "CONCEPT_EXPLANATION" | "CUSTOM"
+   - prompt: "specific instructions or custom prompt"
+   - language: "en" | "de" | "fr" (optional)
+   - when: "now" | "later"
+
+5. slide_deck
+   - format: "DETAILED_DECK" | "PRESENTER_SLIDES"
+   - options.slide_length: "DEFAULT" | "SHORT"
+   - when: "now" | "later"
+
+6. infographic
+   - options.orientation: "LANDSCAPE" | "PORTRAIT" | "SQUARE"
+   - options.detail_level: "CONCISE" | "STANDARD" | "DETAILED"
+   - options.style: "AUTO_SELECT" | "SKETCH_NOTE" | "PROFESSIONAL" | "BENTO_GRID" | "EDITORIAL" | "INSTRUCTIONAL" | "BRICKS" | "CLAY" | "ANIME" | "KAWAII" | "SCIENTIFIC"
+   - when: "now" | "later"
+
+7. mind_map_interactive
+   - prompt: "concept focus"
+   - when: "now" (Generate Later and language unsupported)
+
+8. mind_map_note
+   - prompt: "concept focus"
+   - language: "en" | "de" | "fr" (optional)
+   - when: "now" (Generate Later unsupported)
+
+9. flashcards
+   - options.quantity: "FEWER" | "STANDARD" | "MORE"
+   - options.difficulty: "EASY" | "MEDIUM" | "HARD"
+   - options.include_images: false | true
+   - when: "now" | "later"
+
+10. quiz
+    - options.question_types: ["MULTIPLE_CHOICE" | "FILL_IN_THE_BLANK" | "MULTIPLE_SELECT" | "SHORT_ANSWER"]
+    - options.quantity: "FEWER" | "STANDARD" | "MORE"
+    - options.difficulty: "EASY" | "MEDIUM" | "HARD"
+    - when: "now" | "later"
+
+11. data_table
+    - prompt: "table layout and comparison instructions"
+    - when: "now" (Generate Later unsupported)
+
+Common Fields:
+- "notebook_id": "REPLACE_WITH_NOTEBOOK_ID" (or the actual notebook UUID)
+- "source_ids": ["uuid-1", "uuid-2"] (optional, omit to use all sources in notebook)
+- "when": "now" (default) or "later" (Google queue, where supported)</pre>
+</div>
+</details>
 <h2>Persistent jobs</h2><p>Retry resumes an existing artifact when its ID is known. A job with an uncertain submission is never automatically submitted again: find its artifact in NotebookLM, then attach its ID below.</p>
 <table><thead><tr><th>Job</th><th>State</th><th>Artifact / error</th><th>Actions</th></tr></thead><tbody id="jobs"></tbody></table>
 </body></html>

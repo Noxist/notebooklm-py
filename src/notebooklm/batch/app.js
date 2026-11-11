@@ -68,6 +68,62 @@ async function refresh() {
     }
   }
 }
+async function loadNotebooks() {
+  try {
+    const list = await request("/api/notebooks");
+    const sel = el("notebook-select");
+    sel.replaceChildren();
+    if (!list || list.length === 0) {
+      const opt = document.createElement("option");
+      opt.textContent = "No notebooks found (or offline)";
+      sel.append(opt);
+      return;
+    }
+    const def = document.createElement("option");
+    def.value = "";
+    def.textContent = "-- Choose a notebook --";
+    sel.append(def);
+    for (const nb of list) {
+      const opt = document.createElement("option");
+      opt.value = nb.id;
+      opt.textContent = nb.title + " (" + nb.id.slice(0, 8) + "…)";
+      sel.append(opt);
+    }
+  } catch (_) {}
+}
+el("apply-notebook")?.addEventListener("click", () => {
+  const selectedId = el("notebook-select").value;
+  if (!selectedId) {
+    feedback("Please select a notebook from the dropdown first.");
+    return;
+  }
+  try {
+    const data = JSON.parse(el("editor").value);
+    const jobs = Array.isArray(data) ? data : data.jobs;
+    if (Array.isArray(jobs)) {
+      for (const j of jobs) j.notebook_id = selectedId;
+      el("editor").value = JSON.stringify(data, null, 2);
+      feedback("Applied notebook ID " + selectedId + " to " + jobs.length + " job(s).");
+    }
+  } catch (_) {
+    el("editor").value = el("editor").value
+      .replaceAll("REPLACE_WITH_NOTEBOOK_ID", selectedId)
+      .replaceAll("YOUR_NOTEBOOK_ID", selectedId);
+    feedback("Replaced placeholder notebook IDs with " + selectedId);
+  }
+});
+el("copy-notebook-id")?.addEventListener("click", () => {
+  const selectedId = el("notebook-select").value;
+  if (!selectedId) {
+    feedback("Please select a notebook from the dropdown first.");
+    return;
+  }
+  navigator.clipboard.writeText(selectedId).then(() => {
+    feedback("Copied notebook ID: " + selectedId);
+  }).catch(() => {
+    feedback("Notebook ID: " + selectedId);
+  });
+});
 el("file").addEventListener("change", async event => {
   const file = event.target.files[0];
   if (!file) return;
@@ -82,5 +138,6 @@ el("dry").addEventListener("click", () => action("/api/dry-run"));
 el("submit").addEventListener("click", () => action("/api/submit"));
 el("refresh").addEventListener("click", () => refresh().catch(error => feedback(error.message)));
 request("/api/schema").then(data => { el("schema").textContent = JSON.stringify(data, null, 2); }).catch(error => feedback(error.message));
+loadNotebooks().catch(() => {});
 refresh().catch(error => feedback(error.message));
 setInterval(() => refresh().catch(error => feedback(error.message)), 5000);

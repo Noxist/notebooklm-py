@@ -81,3 +81,25 @@ def test_invalid_and_large_json_are_rejected(local_client):
 def test_invalid_runtime_controls(tmp_path):
     with pytest.raises(ValueError):
         create_app(tmp_path / "jobs.sqlite3", concurrency=0)
+
+
+def test_list_notebooks_endpoint(tmp_path):
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    fake_client = SimpleNamespace(
+        notebooks=SimpleNamespace(
+            list=AsyncMock(return_value=[SimpleNamespace(id="nb-1", title="Test Notebook")])
+        )
+    )
+
+    @asynccontextmanager
+    async def factory():
+        yield fake_client
+
+    app = create_app(tmp_path / "jobs.sqlite3", client_factory=factory, run_workers=False)
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        r = client.get("/api/notebooks")
+        assert r.status_code == 200
+        assert r.json() == [{"id": "nb-1", "title": "Test Notebook"}]

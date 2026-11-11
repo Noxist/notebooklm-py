@@ -11,6 +11,15 @@ button,input{font:inherit;margin:.25rem;padding:.5rem}button{cursor:pointer}td,t
 <p>Paste JSON or import a file. Validation and dry run do not contact Google. Submission uses your local NotebookLM authentication.</p>
 <p><strong>Generate Later is Google's queue:</strong> Google chooses when to generate. This app does not schedule an exact time. Keep the app running to track completion and verify titles; saved jobs resume on restart.</p>
 <label for="file">Import JSON file</label> <input id="file" type="file" accept=".json,application/json">
+<div style="margin:1rem 0;padding:.75rem;background:#fff;border:1px solid #ccd6dc;border-radius:6px">
+  <label for="notebook-select"><strong>Your Notebooks:</strong></label>
+  <div style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem;flex-wrap:wrap">
+    <select id="notebook-select" style="flex:1;min-width:240px"><option value="">Loading your notebooks…</option></select>
+    <button id="apply-notebook" type="button">Apply to JSON</button>
+    <button id="copy-notebook-id" type="button">Copy ID</button>
+  </div>
+  <small style="color:#555;margin-top:.3rem">Select a notebook to insert its ID into the jobs below, or edit the JSON manually.</small>
+</div>
 <label for="editor"><small>Batch JSON (stable unique job IDs are required)</small></label>
 <textarea id="editor" spellcheck="false">{"jobs":[{"id":"audio-example-001","type":"audio","notebook_id":"REPLACE_WITH_NOTEBOOK_ID","title":"Weekly overview","prompt":"Summarize the central ideas","language":"en","when":"now"}]}</textarea>
 <div><button id="validate">Validate</button><button id="dry">Dry run</button><button id="submit">Submit batch</button><button id="refresh">Refresh status</button></div>

@@ -129,6 +129,16 @@ def create_app(
     async def capabilities():
         return schema()
 
+    @app.get("/api/notebooks")
+    async def list_notebooks():
+        try:
+            async with client_factory() as client:
+                items = await client.notebooks.list()
+                return [{"id": nb.id, "title": nb.title} for nb in items]
+        except Exception as exc:
+            logger.debug("Failed to list notebooks for UI: %s", exc)
+            return []
+
     @app.get("/api/jobs")
     async def jobs():
         return store.list()

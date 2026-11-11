@@ -11,7 +11,7 @@ from notebooklm.types import ReportFormat
 
 
 def job(kind="audio", **extra):
-    return dict(id="j", type=kind, notebook_id="nb", title="My title", **extra)
+    return {"id": "j", "type": kind, "notebook_id": "nb", "title": "My title"} | extra
 
 
 @pytest.mark.parametrize("kind", REGISTRY)
@@ -336,3 +336,46 @@ async def test_crash_after_retry_acceptance_resumes_polling(tmp_path):
 def test_ignored_report_options_are_explicitly_rejected(fmt, options):
     with pytest.raises(ValueError, match="ignored"):
         validate_batch([job("report", format=fmt, options=options)])
+
+
+def test_validation_error_identifies_job_id_and_problematic_field():
+    batch = [
+        job("audio", id="j1"),
+        job("report", id="j2", options={"bad_opt": 1}),
+    ]
+    with pytest.raises(ValueError) as exc:
+        validate_batch(batch)
+    assert "j2" in str(exc.value)
+    assert "bad_opt" in str(exc.value)
+
+    batch_missing = [job("audio", id="j3", title="   ")]
+    with pytest.raises(ValueError) as exc2:
+        validate_batch(batch_missing)
+    assert "j3" in str(exc2.value)
+    assert "title" in str(exc2.value)
+
+
+@pytest.mark.asyncio
+async def test_mind_map_note_completes_synchronously(tmp_path):
+    store = Store(tmp_path / "jobs.db")
+    store.add([job("mind_map_note", id="map1", title="Mind Map Note")])
+    generate_mock = AsyncMock(return_value=SimpleNamespace(id="note-123", note_id="note-123"))
+    rename_mock = AsyncMock(return_value=SimpleNamespace(id="note-123", title="Mind Map Note"))
+    get_mock = AsyncMock(return_value=SimpleNamespace(id="note-123", title="Mind Map Note"))
+    mm_api = SimpleNamespace(
+        generate=generate_mock,
+        rename=rename_mock,
+        get=get_mock,
+    )
+
+    @asynccontextmanager
+    async def client():
+        yield SimpleNamespace(mind_maps=mm_api, artifacts=SimpleNamespace())
+
+    engine = Engine(store, client, interval=0)
+    await engine.run_once()
+    row = store.list()[0]
+    assert row["status"] == "complete"
+    assert row["artifact_id"] == "note-123"
+    generate_mock.assert_awaited_once()
+    store.close()

@@ -196,36 +196,53 @@ def validate_batch(payload: Any) -> builtins.list[dict]:
     if not isinstance(payload, list) or not payload or len(payload) > 1000:
         raise ValueError("jobs must contain 1 to 1000 jobs")
     seen = set()
-    for job in payload:
-        if not isinstance(job, dict) or set(job) - COMMON:
-            raise ValueError("job contains unknown fields")
+    for idx, job in enumerate(payload, start=1):
+        if not isinstance(job, dict):
+            raise ValueError(f"job #{idx} must be an object")
+        unknown = set(job) - COMMON
+        if unknown:
+            jid = job.get("id") or f"#{idx}"
+            raise ValueError(f"job {jid!r} contains unknown fields: {', '.join(sorted(unknown))}")
         for key in ("id", "type", "notebook_id", "title"):
             if not isinstance(job.get(key), str) or not job[key].strip():
-                raise ValueError(f"{key} must be a non-empty string")
+                jid = job.get("id") or f"#{idx}"
+                raise ValueError(f"job {jid!r}: {key} must be a non-empty string")
         if job["id"] in seen:
-            raise ValueError("duplicate job id")
+            raise ValueError(f"duplicate job id {job['id']!r}")
         seen.add(job["id"])
         if job["type"] not in REGISTRY:
-            raise ValueError("unknown generation type")
+            raise ValueError(f"job {job['id']!r}: unknown generation type {job['type']!r}")
         if job.get("when", "now") not in ("now", "later"):
-            raise ValueError("when must be now or later; exact scheduling is unsupported")
+            raise ValueError(
+                f"job {job['id']!r}: when must be now or later; exact scheduling is unsupported"
+            )
         if job.get("when") == "later" and job["type"] in NO_LATER:
-            raise ValueError(f"Generate Later unsupported for {job['type']}")
+            raise ValueError(f"job {job['id']!r}: Generate Later unsupported for {job['type']}")
         for key in ("prompt", "language"):
             if key in job and not isinstance(job[key], str):
-                raise ValueError(f"{key} must be a string")
+                raise ValueError(f"job {job['id']!r}: {key} must be a string")
         if job["type"] == "mind_map_interactive" and "language" in job:
-            raise ValueError("web interactive mind maps do not support language selection")
+            raise ValueError(
+                f"job {job['id']!r}: web interactive mind maps do not support language selection"
+            )
         if "source_ids" in job and (
             not isinstance(job["source_ids"], list)
             or not job["source_ids"]
             or any(not isinstance(s, str) or not s.strip() for s in job["source_ids"])
         ):
-            raise ValueError("source_ids must be a non-empty list of IDs")
+            raise ValueError(f"job {job['id']!r}: source_ids must be a non-empty list of IDs")
         opts = job.get("options", {})
-        if not isinstance(opts, dict) or set(opts) - set(REGISTRY[job["type"]][2]):
-            raise ValueError("unknown type-specific option")
-        call_args(job)
+        if not isinstance(opts, dict):
+            raise ValueError(f"job {job['id']!r}: options must be an object")
+        unknown_opts = set(opts) - set(REGISTRY[job["type"]][2])
+        if unknown_opts:
+            raise ValueError(
+                f"job {job['id']!r}: unknown type-specific option(s): {', '.join(sorted(unknown_opts))}"
+            )
+        try:
+            call_args(job)
+        except ValueError as err:
+            raise ValueError(f"job {job['id']!r}: {err}") from err
     return json.loads(json.dumps(payload))
 
 

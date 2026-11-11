@@ -28,8 +28,12 @@ function button(label, action) {
   });
   return node;
 }
+const drafts = new Map();
 async function refresh() {
   const jobs = await request("/api/jobs");
+  const active = document.activeElement;
+  const activeJobId = active?.dataset?.jobId;
+  const cursor = (active && active.tagName === "INPUT") ? [active.selectionStart, active.selectionEnd] : null;
   el("jobs").replaceChildren();
   for (const job of jobs) {
     const row = document.createElement("tr");
@@ -43,10 +47,25 @@ async function refresh() {
         const id = document.createElement("input");
         id.placeholder = "Existing artifact ID";
         id.setAttribute("aria-label", "Existing artifact ID for " + job.id);
-        cells[3].append(id, button("Attach and resume", () => request("/api/jobs/" + encodeURIComponent(job.id) + "/attach", {artifact_id: id.value})));
+        id.dataset.jobId = job.id;
+        if (drafts.has(job.id)) id.value = drafts.get(job.id);
+        id.addEventListener("input", () => drafts.set(job.id, id.value));
+        cells[3].append(id, button("Attach and resume", async () => {
+          await request("/api/jobs/" + encodeURIComponent(job.id) + "/attach", {artifact_id: id.value});
+          drafts.delete(job.id);
+        }));
       }
     }
     row.append(...cells); el("jobs").append(row);
+  }
+  if (activeJobId) {
+    const nextActive = el("jobs").querySelector(`input[data-job-id="${CSS.escape(activeJobId)}"]`);
+    if (nextActive) {
+      nextActive.focus();
+      if (cursor && cursor[0] !== null) {
+        try { nextActive.setSelectionRange(cursor[0], cursor[1]); } catch (_) {}
+      }
+    }
   }
 }
 el("file").addEventListener("change", async event => {

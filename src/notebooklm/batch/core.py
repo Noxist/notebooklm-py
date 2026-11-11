@@ -207,6 +207,17 @@ def validate_batch(payload: Any) -> builtins.list[dict]:
             if not isinstance(job.get(key), str) or not job[key].strip():
                 jid = job.get("id") or f"#{idx}"
                 raise ValueError(f"job {jid!r}: {key} must be a non-empty string")
+        if job["notebook_id"].strip().upper() in (
+            "REPLACE_WITH_NOTEBOOK_ID",
+            "YOUR_NOTEBOOK_ID",
+            "NOTEBOOK_ID",
+            "REPLACE_ME",
+        ):
+            jid = job.get("id") or f"#{idx}"
+            raise ValueError(
+                f"job {jid!r}: notebook_id is still a placeholder ({job['notebook_id']}). "
+                "Please select your notebook from the dropdown above and click 'Apply to JSON' first."
+            )
         if job["id"] in seen:
             raise ValueError(f"duplicate job id {job['id']!r}")
         seen.add(job["id"])
@@ -289,15 +300,31 @@ class Store:
         existing = {r["id"]: r for r in self.list()}
         for j in jobs:
             if j["id"] in existing and existing[j["id"]]["job"] != j:
+                row = existing[j["id"]]
+                if row["status"] in ("uncertain", "failed") and not row.get("artifact_id"):
+                    continue
                 raise ValueError("job id already exists with different content")
         if dry_run:
             return [{"id": j["id"], "job": j, "status": "dry_run"} for j in jobs]
         with self.db:
-            self.db.executemany(
-                "INSERT OR IGNORE INTO jobs(id,job,status) VALUES (?,?,'queued')",
-                [(j["id"], json.dumps(j, sort_keys=True)) for j in jobs],
-            )
+            for j in jobs:
+                if j["id"] in existing:
+                    row = existing[j["id"]]
+                    if row["status"] in ("uncertain", "failed") and not row.get("artifact_id"):
+                        self.db.execute(
+                            "UPDATE jobs SET job=?, status='queued', error=NULL, remote_status=NULL, renamed=0 WHERE id=?",
+                            (json.dumps(j, sort_keys=True), j["id"]),
+                        )
+                        continue
+                self.db.execute(
+                    "INSERT OR IGNORE INTO jobs(id,job,status) VALUES (?,?,'queued')",
+                    (j["id"], json.dumps(j, sort_keys=True)),
+                )
         return self.list()
+
+    def delete(self, id: str) -> None:
+        self.db.execute("DELETE FROM jobs WHERE id=?", (id,))
+        self.db.commit()
 
     def retry(self, id: str) -> None:
         row = next((r for r in self.list() if r["id"] == id), None)

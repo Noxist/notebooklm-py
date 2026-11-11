@@ -56,6 +56,7 @@ async function refresh() {
         }));
       }
     }
+    cells[3].append(button("Remove", () => request("/api/jobs/" + encodeURIComponent(job.id) + "/delete", {})));
     row.append(...cells); el("jobs").append(row);
   }
   if (activeJobId) {
@@ -143,7 +144,16 @@ el("file").addEventListener("change", async event => {
 });
 el("validate").addEventListener("click", () => action("/api/validate"));
 el("dry").addEventListener("click", () => action("/api/dry-run"));
-el("submit").addEventListener("click", () => action("/api/submit"));
+el("submit").addEventListener("click", async () => {
+  const selId = el("notebook-select")?.value;
+  let text = el("editor").value;
+  if (selId && (text.includes("REPLACE_WITH_NOTEBOOK_ID") || text.includes("YOUR_NOTEBOOK_ID"))) {
+    text = text.replaceAll("REPLACE_WITH_NOTEBOOK_ID", selId).replaceAll("YOUR_NOTEBOOK_ID", selId);
+    el("editor").value = text;
+    feedback("Auto-applied selected notebook ID (" + selId + ") to batch.");
+  }
+  await action("/api/submit");
+});
 el("refresh").addEventListener("click", () => refresh().catch(error => feedback(error.message)));
 request("/api/schema").then(data => { el("schema").textContent = JSON.stringify(data, null, 2); }).catch(error => feedback(error.message));
 loadNotebooks().catch(() => {});

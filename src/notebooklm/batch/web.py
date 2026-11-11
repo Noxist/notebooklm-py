@@ -186,4 +186,9 @@ def create_app(
         store.attach(job_id, artifact_id)
         return {"ok": True}
 
+    @app.post("/api/jobs/{job_id}/delete")
+    async def delete_job(job_id: str):
+        store.delete(job_id)
+        return {"ok": True}
+
     return app

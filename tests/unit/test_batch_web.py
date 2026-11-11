@@ -103,3 +103,12 @@ def test_list_notebooks_endpoint(tmp_path):
         r = client.get("/api/notebooks")
         assert r.status_code == 200
         assert r.json() == [{"id": "nb-1", "title": "Test Notebook"}]
+
+
+def test_delete_job_endpoint(local_client):
+    client, _ = local_client
+    post(client, "/api/submit", payload())
+    assert len(client.get("/api/jobs").json()) == 1
+    r = post(client, "/api/jobs/a/delete", {})
+    assert r.status_code == 200
+    assert len(client.get("/api/jobs").json()) == 0

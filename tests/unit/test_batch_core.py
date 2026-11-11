@@ -379,3 +379,25 @@ async def test_mind_map_note_completes_synchronously(tmp_path):
     assert row["artifact_id"] == "note-123"
     generate_mock.assert_awaited_once()
     store.close()
+
+
+def test_placeholder_notebook_id_is_rejected():
+    with pytest.raises(ValueError) as exc:
+        validate_batch([job("audio", notebook_id="REPLACE_WITH_NOTEBOOK_ID")])
+    assert "placeholder" in str(exc.value)
+
+
+def test_store_can_replace_precreation_failed_jobs(tmp_path):
+    store = Store(tmp_path / "jobs.db")
+    store.add([job("report", id="j1", notebook_id="nb1")])
+    store.update("j1", status="uncertain", error="ClientError")
+    # Submitting with corrected notebook_id should replace the pre-creation failed job
+    store.add([job("report", id="j1", notebook_id="nb2")])
+    rows = store.list()
+    assert len(rows) == 1
+    assert rows[0]["status"] == "queued"
+    assert rows[0]["job"]["notebook_id"] == "nb2"
+    # Deleting the job
+    store.delete("j1")
+    assert len(store.list()) == 0
+    store.close()

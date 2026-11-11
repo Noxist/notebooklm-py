@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NotebookLM batch generation</title>
+<style>
+body{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#192d36;background:#f6f8fa}
+textarea{width:100%;box-sizing:border-box;min-height:340px;font:14px monospace;padding:1rem;border:1px solid #849ba7;border-radius:6px}
+button,input{font:inherit;margin:.25rem;padding:.5rem}button{cursor:pointer}td,th{text-align:left;padding:.6rem;border-bottom:1px solid #ccd6dc;vertical-align:top}table{width:100%;border-collapse:collapse}pre{white-space:pre-wrap;overflow-wrap:anywhere}#feedback{padding:.75rem;background:#fff;border-left:4px solid #497b97}small{display:block}details{margin:1rem 0}
+</style><script src="/app.js" defer></script></head>
+<body><h1>NotebookLM Studio batch generation</h1>
+<p>Paste JSON or import a file. Validation and dry run do not contact Google. Submission uses your local NotebookLM authentication.</p>
+<p><strong>Generate Later is Google's queue:</strong> Google chooses when to generate. This app does not schedule an exact time. Keep the app running to track completion and verify titles; saved jobs resume on restart.</p>
+<label for="file">Import JSON file</label> <input id="file" type="file" accept=".json,application/json">
+<label for="editor"><small>Batch JSON (stable unique job IDs are required)</small></label>
+<textarea id="editor" spellcheck="false">{"jobs":[{"id":"audio-example-001","type":"audio","notebook_id":"REPLACE_WITH_NOTEBOOK_ID","title":"Weekly overview","prompt":"Summarize the central ideas","language":"en","when":"now"}]}</textarea>
+<div><button id="validate">Validate</button><button id="dry">Dry run</button><button id="submit">Submit batch</button><button id="refresh">Refresh status</button></div>
+<pre id="feedback" role="status" aria-live="polite">Ready. No jobs submitted.</pre>
+<details><summary>Supported types and options</summary><pre id="schema">Loading…</pre></details>
+<h2>Persistent jobs</h2><p>Retry resumes an existing artifact when its ID is known. A job with an uncertain submission is never automatically submitted again: find its artifact in NotebookLM, then attach its ID below.</p>
+<table><thead><tr><th>Job</th><th>State</th><th>Artifact / error</th><th>Actions</th></tr></thead><tbody id="jobs"></tbody></table>
+</body></html>

@@ -1,0 +1,17 @@
+{
+  "jobs": [
+    {
+      "id": "briefing-selected-001",
+      "type": "report",
+      "notebook_id": "YOUR_NOTEBOOK_ID",
+      "title": "French source briefing",
+      "prompt": "Compare the evidence and identify unresolved questions.",
+      "language": "fr",
+      "format": "BRIEFING_DOC",
+      "when": "later",
+      "source_ids": [
+        "YOUR_SOURCE_ID"
+      ]
+    }
+  ]
+}

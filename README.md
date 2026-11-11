@@ -15,6 +15,8 @@
   <a href="https://trendshift.io/repositories/19116" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19116" alt="teng-lin%2Fnotebooklm-py | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
 
+**Fork feature:** [JSON Studio batch generation](docs/batch-generation.md) — a local editor with persistent jobs, verified titles, and Generate Later support. Start with `python -m notebooklm.batch` after installing the `server` extra.
+
 **Source & Development**: <https://github.com/teng-lin/notebooklm-py>
 
 > **⚠️ Unofficial Library - Use at Your Own Risk**

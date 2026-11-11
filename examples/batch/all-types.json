@@ -1,0 +1,16 @@
+{"jobs":[
+{"id":"audio-001","type":"audio","notebook_id":"YOUR_NOTEBOOK_ID","title":"Weekly podcast","prompt":"Explain the key findings","language":"en","format":"DEEP_DIVE","when":"later","options":{"audio_length":"SHORT"}},
+{"id":"video-001","type":"video","notebook_id":"YOUR_NOTEBOOK_ID","title":"Visual summary","format":"EXPLAINER","options":{"video_style":"WHITEBOARD"}},
+{"id":"cinematic-001","type":"cinematic_video","notebook_id":"YOUR_NOTEBOOK_ID","title":"Cinematic overview","prompt":"Tell a compelling story"},
+{"id":"briefing-001","type":"report","notebook_id":"YOUR_NOTEBOOK_ID","title":"Briefing","format":"BRIEFING_DOC"},
+{"id":"study-001","type":"report","notebook_id":"YOUR_NOTEBOOK_ID","title":"Study guide","format":"STUDY_GUIDE"},
+{"id":"blog-001","type":"report","notebook_id":"YOUR_NOTEBOOK_ID","title":"Blog","format":"BLOG_POST"},
+{"id":"custom-001","type":"report","notebook_id":"YOUR_NOTEBOOK_ID","title":"Custom report","format":"CUSTOM","prompt":"Compare the evidence in an executive report"},
+{"id":"slides-001","type":"slide_deck","notebook_id":"YOUR_NOTEBOOK_ID","title":"Presentation","format":"PRESENTER_SLIDES","options":{"slide_length":"SHORT"}},
+{"id":"infographic-001","type":"infographic","notebook_id":"YOUR_NOTEBOOK_ID","title":"Key facts","options":{"orientation":"PORTRAIT","detail_level":"DETAILED","style":"SCIENTIFIC"}},
+{"id":"interactive-001","type":"mind_map_interactive","notebook_id":"YOUR_NOTEBOOK_ID","title":"Interactive map","prompt":"Connect the central concepts"},
+{"id":"note-map-001","type":"mind_map_note","notebook_id":"YOUR_NOTEBOOK_ID","title":"Note map","language":"en"},
+{"id":"cards-001","type":"flashcards","notebook_id":"YOUR_NOTEBOOK_ID","title":"Revision cards","options":{"quantity":"MORE","difficulty":"HARD","include_images":false}},
+{"id":"quiz-001","type":"quiz","notebook_id":"YOUR_NOTEBOOK_ID","title":"Knowledge check","options":{"question_types":["MULTIPLE_CHOICE"],"quantity":"STANDARD","difficulty":"MEDIUM"}},
+{"id":"table-001","type":"data_table","notebook_id":"YOUR_NOTEBOOK_ID","title":"Evidence table","prompt":"Compare the sources in a table"}
+]}

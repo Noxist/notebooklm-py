@@ -2,6 +2,9 @@
 title NotebookLM Batch Studio
 cd /d "%~dp0"
 
+:: Enable silent background re-authentication
+set NOTEBOOKLM_HEADLESS_REAUTH=1
+
 echo ========================================================
 echo   Starting NotebookLM Batch Studio...
 echo   Opening http://127.0.0.1:8765 in your browser...

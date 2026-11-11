@@ -449,10 +449,24 @@ class Engine:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.store.update(
-                    id, status="failed" if artifact_id else "uncertain", error=type(exc).__name__
+                from notebooklm.exceptions import AuthError
+
+                is_auth_loss = isinstance(exc, AuthError)
+                new_status = (
+                    "polling"
+                    if (artifact_id and is_auth_loss)
+                    else (
+                        "retry_queued"
+                        if is_auth_loss
+                        else ("failed" if artifact_id else "uncertain")
+                    )
                 )
-                LOG.warning("batch job %s: %s", id, type(exc).__name__)
+                self.store.update(
+                    id,
+                    status=new_status,
+                    error=type(exc).__name__,
+                )
+                LOG.warning("batch job %s: %s (status=%s)", id, type(exc).__name__, new_status)
 
     async def _rename(self, client: Any, job: dict, artifact_id: str) -> None:
         await self._pace()

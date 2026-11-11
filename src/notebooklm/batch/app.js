@@ -70,13 +70,25 @@ async function refresh() {
   }
 }
 async function loadNotebooks() {
+  const reloginBtn = el("relogin-btn");
   try {
-    const list = await request("/api/notebooks");
+    const response = await fetch("/api/notebooks");
+    const data = await response.json();
     const sel = el("notebook-select");
     sel.replaceChildren();
+    if (!response.ok) {
+      const opt = document.createElement("option");
+      opt.textContent = "⚠️ Google session expired. Click 'Log in to Google'";
+      sel.append(opt);
+      if (reloginBtn) reloginBtn.style.display = "inline-block";
+      feedback("⚠️ Google session expired. Click 'Log in to Google' to reconnect.");
+      return;
+    }
+    if (reloginBtn) reloginBtn.style.display = "none";
+    const list = Array.isArray(data) ? data : (data.notebooks || []);
     if (!list || list.length === 0) {
       const opt = document.createElement("option");
-      opt.textContent = "No notebooks found (or offline)";
+      opt.textContent = "No notebooks found";
       sel.append(opt);
       return;
     }
@@ -90,8 +102,27 @@ async function loadNotebooks() {
       opt.textContent = nb.title + " (" + nb.id.slice(0, 8) + "…)";
       sel.append(opt);
     }
-  } catch (_) {}
+  } catch (_) {
+    if (reloginBtn) reloginBtn.style.display = "inline-block";
+  }
 }
+el("relogin-btn")?.addEventListener("click", async () => {
+  const btn = el("relogin-btn");
+  btn.disabled = true;
+  btn.textContent = "Connecting to Google…";
+  feedback("Connecting to Google... Complete login in the browser window if prompted.");
+  try {
+    const res = await request("/api/auth/login", {});
+    feedback("✅ " + (res.message || "Google authentication restored!"));
+    btn.style.display = "none";
+    await loadNotebooks();
+  } catch (err) {
+    feedback("Authentication failed: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Log in to Google";
+  }
+});
 el("apply-notebook")?.addEventListener("click", () => {
   const selectedId = el("notebook-select").value;
   if (!selectedId) {

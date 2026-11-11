@@ -5,7 +5,11 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import os
 from pathlib import Path
+
+# Enable unattended headless background re-auth by default for local batch studio
+os.environ.setdefault("NOTEBOOKLM_HEADLESS_REAUTH", "1")
 
 
 def main() -> None:

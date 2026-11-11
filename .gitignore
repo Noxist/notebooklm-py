@@ -48,6 +48,8 @@ src/notebooklm/_commit.py
 
 # Mobile reverse-engineering working files (local only)
 # The APK is ~39MB of Google's proprietary binaries — never commit it.
+Privatrecht_Reports.zip
+*.zip
 notebooklm.apk/
 frida-scripts/
 error.log

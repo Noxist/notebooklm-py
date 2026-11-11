@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -17,13 +18,18 @@ from notebooklm.client import NotebookLMClient
 
 from .core import Engine, Store, schema, validate_batch
 
+# Opt into headless background re-auth by default for local batch studio
+os.environ.setdefault("NOTEBOOKLM_HEADLESS_REAUTH", "1")
+
 logger = logging.getLogger(__name__)
 MAX_BODY_BYTES = 1024 * 1024
 
 
 def default_client_factory():
     """Avoid hidden transport retries of an ambiguously accepted creation."""
-    return NotebookLMClient.from_storage(rate_limit_max_retries=0, server_error_max_retries=0)
+    return NotebookLMClient.from_storage(
+        rate_limit_max_retries=0, server_error_max_retries=0, allow_headless=True
+    )
 
 
 def create_app(
@@ -136,8 +142,56 @@ def create_app(
                 items = await client.notebooks.list()
                 return [{"id": nb.id, "title": nb.title} for nb in items]
         except Exception as exc:
-            logger.debug("Failed to list notebooks for UI: %s", exc)
-            return []
+            logger.warning("Failed to list notebooks for UI: %s", exc)
+            return JSONResponse(
+                {
+                    "error": "auth_required",
+                    "detail": "Google authentication expired. Please re-authenticate.",
+                },
+                status_code=401,
+            )
+
+    @app.post("/api/auth/login")
+    async def auth_login():
+        from notebooklm._browser.headless_reauth import (
+            HeadlessReauthStatus,
+            attempt_headless_reauth,
+        )
+        from notebooklm.cli.session_cmd import _run_playwright_login
+        from notebooklm.paths import get_browser_profile_dir, get_storage_path
+
+        storage_path = get_storage_path()
+        browser_profile = get_browser_profile_dir()
+
+        # Step 1: Attempt silent headless re-auth first
+        try:
+            result = await asyncio.to_thread(
+                attempt_headless_reauth,
+                storage_path=storage_path,
+                allow_headless=True,
+                browser_profile=browser_profile,
+            )
+            if result.status == HeadlessReauthStatus.SUCCESS:
+                return {"status": "ok", "message": "Google authentication refreshed headlessly."}
+        except Exception as exc:
+            logger.debug("Headless reauth attempt before interactive login yielded: %s", exc)
+
+        # Step 2: If headless was insufficient, launch interactive browser login
+        try:
+            await asyncio.to_thread(
+                _run_playwright_login,
+                browser="chromium",
+                browser_profile=browser_profile,
+                storage_path=storage_path,
+                browser_timeout=300,
+            )
+            return {"status": "ok", "message": "Google authentication completed successfully."}
+        except Exception as exc:
+            logger.error("Interactive login failed: %s", exc)
+            return JSONResponse(
+                {"status": "error", "detail": f"Login failed: {exc}"},
+                status_code=500,
+            )
 
     @app.get("/api/jobs")
     async def jobs():

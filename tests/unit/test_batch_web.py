@@ -105,6 +105,41 @@ def test_list_notebooks_endpoint(tmp_path):
         assert r.json() == [{"id": "nb-1", "title": "Test Notebook"}]
 
 
+def test_list_notebooks_auth_expired(tmp_path):
+    from contextlib import asynccontextmanager
+    from unittest.mock import AsyncMock
+
+    from notebooklm.exceptions import AuthError
+
+    @asynccontextmanager
+    async def factory():
+        mock_c = AsyncMock()
+        mock_c.notebooks.list.side_effect = AuthError("Expired")
+        yield mock_c
+
+    app = create_app(tmp_path / "jobs.sqlite3", client_factory=factory, run_workers=False)
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        r = client.get("/api/notebooks")
+        assert r.status_code == 401
+        assert r.json()["error"] == "auth_required"
+
+
+def test_auth_login_endpoint(local_client, monkeypatch):
+    from notebooklm._browser.headless_reauth import HeadlessReauthResult, HeadlessReauthStatus
+
+    client, _ = local_client
+
+    # Mock headless reauth returning SUCCESS
+    monkeypatch.setattr(
+        "notebooklm._browser.headless_reauth.attempt_headless_reauth",
+        lambda **kwargs: HeadlessReauthResult(HeadlessReauthStatus.SUCCESS, "ok"),
+    )
+
+    r = post(client, "/api/auth/login", {})
+    assert r.status_code == 200
+    assert r.json()["status"] == "ok"
+
+
 def test_delete_job_endpoint(local_client):
     client, _ = local_client
     post(client, "/api/submit", payload())

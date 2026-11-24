@@ -6,7 +6,18 @@ import argparse
 import logging
 import math
 import os
+import sys
 from pathlib import Path
+
+# Ensure stdout and stderr exist even when run via pythonw.exe (windowless mode)
+if sys.stdout is None or sys.stderr is None:
+    log_dir = Path.home() / ".notebooklm"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    _batch_log = open(log_dir / "batch_studio.log", "a", encoding="utf-8")  # noqa: SIM115
+    if sys.stdout is None:
+        sys.stdout = _batch_log
+    if sys.stderr is None:
+        sys.stderr = _batch_log
 
 # Enable unattended headless background re-auth by default for local batch studio
 os.environ.setdefault("NOTEBOOKLM_HEADLESS_REAUTH", "1")

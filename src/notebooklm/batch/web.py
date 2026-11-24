@@ -11,12 +11,13 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from notebooklm.client import NotebookLMClient
 
 from .core import Engine, Store, schema, validate_batch
+from .exporter import build_zip_archive, compile_combined_pdf, download_artifact_file
 
 # Opt into headless background re-auth by default for local batch studio
 os.environ.setdefault("NOTEBOOKLM_HEADLESS_REAUTH", "1")
@@ -194,8 +195,132 @@ def create_app(
             )
 
     @app.get("/api/jobs")
-    async def jobs():
-        return store.list()
+    async def jobs(hours: float = 24.0, all: bool = False):
+        if all or hours <= 0:
+            return store.list()
+        return store.list(since_seconds=hours * 3600)
+
+    @app.post("/api/download/pdf")
+    async def download_combined_pdf_endpoint(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        job_ids = payload.get("job_ids") if isinstance(payload, dict) else None
+        title = payload.get("title", "NotebookLM Zusammenfassung") if isinstance(payload, dict) else "NotebookLM Zusammenfassung"
+        all_jobs = store.list()
+        if job_ids:
+            selected = [j for j in all_jobs if j["id"] in job_ids]
+        else:
+            selected = store.list(since_seconds=24 * 3600)
+        completed = [j for j in selected if j.get("status") == "complete" and j.get("artifact_id")]
+        if not completed:
+            raise HTTPException(404, "Keine fertigen Aufträge zum Erstellen der PDF vorhanden.")
+        try:
+            async with client_factory() as client:
+                pdf_bytes = await compile_combined_pdf(client, completed, title=title)
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": 'attachment; filename="notebooklm_zusammenfassung.pdf"'},
+            )
+        except Exception as exc:
+            logger.error("Failed to compile PDF: %s", exc)
+            raise HTTPException(500, f"Fehler beim Erstellen der PDF: {exc}") from exc
+
+    @app.get("/api/download/combined-pdf")
+    async def download_combined_pdf_get(hours: float = 24.0):
+        all_jobs = store.list(since_seconds=hours * 3600) if hours > 0 else store.list()
+        completed = [j for j in all_jobs if j.get("status") == "complete" and j.get("artifact_id")]
+        if not completed:
+            raise HTTPException(404, "Keine fertigen Aufträge in diesem Zeitraum gefunden.")
+        try:
+            async with client_factory() as client:
+                pdf_bytes = await compile_combined_pdf(client, completed)
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": 'attachment; filename="notebooklm_zusammenfassung.pdf"'},
+            )
+        except Exception as exc:
+            logger.error("Failed to compile PDF: %s", exc)
+            raise HTTPException(500, f"Fehler beim Erstellen der PDF: {exc}") from exc
+
+    @app.post("/api/download/zip")
+    async def download_zip_endpoint(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        job_ids = payload.get("job_ids") if isinstance(payload, dict) else None
+        all_jobs = store.list()
+        if job_ids:
+            selected = [j for j in all_jobs if j["id"] in job_ids]
+        else:
+            selected = store.list(since_seconds=24 * 3600)
+        completed = [j for j in selected if j.get("status") == "complete" and j.get("artifact_id")]
+        if not completed:
+            raise HTTPException(404, "Keine fertigen Aufträge zum Herunterladen vorhanden.")
+        try:
+            async with client_factory() as client:
+                zip_bytes = await build_zip_archive(client, completed)
+            return Response(
+                content=zip_bytes,
+                media_type="application/zip",
+                headers={"Content-Disposition": 'attachment; filename="notebooklm_auftraege.zip"'},
+            )
+        except Exception as exc:
+            logger.error("Failed to build ZIP: %s", exc)
+            raise HTTPException(500, f"Fehler beim Erstellen des ZIP-Archivs: {exc}") from exc
+
+    @app.get("/api/jobs/{job_id}/download")
+    async def download_single_job(job_id: str):
+        row = next((r for r in store.list() if r["id"] == job_id), None)
+        if not row:
+            raise HTTPException(404, f"Job {job_id} nicht gefunden.")
+        if row.get("status") != "complete" or not row.get("artifact_id"):
+            raise HTTPException(400, "Dieser Auftrag ist noch nicht abgeschlossen.")
+        job_info = row.get("job", {})
+        notebook_id = job_info.get("notebook_id")
+        artifact_id = row.get("artifact_id")
+        job_type = job_info.get("type", "report")
+        title = job_info.get("title", job_id)
+        try:
+            import tempfile
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                async with client_factory() as client:
+                    file_path = await download_artifact_file(
+                        client, notebook_id, artifact_id, job_type, title, Path(tmp_dir)
+                    )
+                    content = file_path.read_bytes()
+                    filename = file_path.name
+            ext = Path(filename).suffix.lower()
+            media_type = "application/octet-stream"
+            if ext == ".pdf":
+                media_type = "application/pdf"
+            elif ext in (".md", ".txt"):
+                media_type = "text/markdown; charset=utf-8"
+            elif ext == ".csv":
+                media_type = "text/csv; charset=utf-8"
+            elif ext == ".json":
+                media_type = "application/json"
+            elif ext == ".png":
+                media_type = "image/png"
+            elif ext in (".jpg", ".jpeg"):
+                media_type = "image/jpeg"
+            elif ext == ".mp3":
+                media_type = "audio/mpeg"
+            elif ext == ".mp4":
+                media_type = "video/mp4"
+
+            return Response(
+                content=content,
+                media_type=media_type,
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        except Exception as exc:
+            logger.error("Failed to download job %s: %s", job_id, exc)
+            raise HTTPException(500, f"Fehler beim Herunterladen: {exc}") from exc
 
     @app.post("/api/validate")
     async def validate(request: Request):

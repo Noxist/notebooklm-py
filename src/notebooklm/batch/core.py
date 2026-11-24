@@ -86,6 +86,12 @@ COMMON = {
     "when",
     "source_ids",
     "options",
+    "include_in_pdf",
+    "pdf_include",
+    "pdf_order",
+    "order",
+    "position",
+    "pdf",
 }
 
 
@@ -189,9 +195,24 @@ def call_args(job: dict) -> dict:
 
 def validate_batch(payload: Any) -> builtins.list[dict]:
     """Validate the entire batch before persisting or invoking Google."""
+    batch_combine_pdf = False
+    batch_pdf_title = None
     if isinstance(payload, dict):
-        if set(payload) != {"jobs"}:
-            raise ValueError("batch must contain only jobs")
+        allowed_top = {"jobs", "combine_pdf", "pdf", "pdf_title", "title", "output_pdf"}
+        unknown_top = set(payload) - allowed_top
+        if unknown_top:
+            raise ValueError(f"batch contains unknown fields: {', '.join(sorted(unknown_top))}")
+        if "combine_pdf" in payload:
+            batch_combine_pdf = bool(payload["combine_pdf"])
+        if "pdf" in payload:
+            if isinstance(payload["pdf"], bool):
+                batch_combine_pdf = payload["pdf"]
+            elif isinstance(payload["pdf"], dict):
+                batch_combine_pdf = bool(payload["pdf"].get("combine", True))
+                if "title" in payload["pdf"]:
+                    batch_pdf_title = str(payload["pdf"]["title"])
+        if "pdf_title" in payload:
+            batch_pdf_title = str(payload["pdf_title"])
         payload = payload["jobs"]
     if not isinstance(payload, list) or not payload or len(payload) > 1000:
         raise ValueError("jobs must contain 1 to 1000 jobs")
@@ -250,6 +271,65 @@ def validate_batch(payload: Any) -> builtins.list[dict]:
             raise ValueError(
                 f"job {job['id']!r}: unknown type-specific option(s): {', '.join(sorted(unknown_opts))}"
             )
+
+        # PDF options parsing and ordering
+        include_in_pdf = None
+        pdf_order = None
+        if "include_in_pdf" in job:
+            include_in_pdf = bool(job["include_in_pdf"])
+        elif "pdf_include" in job:
+            include_in_pdf = bool(job["pdf_include"])
+
+        if "pdf_order" in job:
+            try:
+                pdf_order = int(job["pdf_order"])
+            except (ValueError, TypeError) as err:
+                raise ValueError(f"job {job.get('id', f'#{idx}')!r}: pdf_order must be an integer") from err
+        elif "order" in job:
+            try:
+                pdf_order = int(job["order"])
+            except (ValueError, TypeError) as err:
+                raise ValueError(f"job {job.get('id', f'#{idx}')!r}: order must be an integer") from err
+        elif "position" in job:
+            try:
+                pdf_order = int(job["position"])
+            except (ValueError, TypeError) as err:
+                raise ValueError(f"job {job.get('id', f'#{idx}')!r}: position must be an integer") from err
+
+        if "pdf" in job:
+            pdf_val = job["pdf"]
+            if isinstance(pdf_val, bool):
+                include_in_pdf = pdf_val
+            elif isinstance(pdf_val, dict):
+                if "include" in pdf_val:
+                    include_in_pdf = bool(pdf_val["include"])
+                if "order" in pdf_val:
+                    try:
+                        pdf_order = int(pdf_val["order"])
+                    except (ValueError, TypeError) as err:
+                        raise ValueError(f"job {job.get('id', f'#{idx}')!r}: pdf.order must be an integer") from err
+                elif "position" in pdf_val:
+                    try:
+                        pdf_order = int(pdf_val["position"])
+                    except (ValueError, TypeError) as err:
+                        raise ValueError(f"job {job.get('id', f'#{idx}')!r}: pdf.position must be an integer") from err
+
+        if batch_combine_pdf and include_in_pdf is None:
+            include_in_pdf = True
+
+        if include_in_pdf:
+            if pdf_order is None:
+                pdf_order = idx
+
+        if include_in_pdf is not None:
+            job["include_in_pdf"] = include_in_pdf
+        if pdf_order is not None:
+            job["pdf_order"] = pdf_order
+        if batch_combine_pdf:
+            job["combine_pdf"] = True
+        if batch_pdf_title:
+            job["batch_pdf_title"] = batch_pdf_title
+
         try:
             call_args(job)
         except ValueError as err:
@@ -265,7 +345,7 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = FileLock(str(path) + ".lock")
         self.lock.acquire(timeout=0)
-        self.db = sqlite3.connect(path)
+        self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, job TEXT NOT NULL, status TEXT NOT NULL, artifact_id TEXT, error TEXT, renamed INTEGER NOT NULL DEFAULT 0)"
@@ -273,19 +353,29 @@ class Store:
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(jobs)")}
         if "remote_status" not in columns:
             self.db.execute("ALTER TABLE jobs ADD COLUMN remote_status TEXT")
+        if "created_at" not in columns:
+            self.db.execute("ALTER TABLE jobs ADD COLUMN created_at REAL")
+            self.db.execute("UPDATE jobs SET created_at = ?", (time.time(),))
         self.db.execute(
             "UPDATE jobs SET status=CASE WHEN artifact_id IS NULL THEN 'uncertain' ELSE 'polling' END WHERE status='submitting'"
         )
         self.db.commit()
 
-    def list(self) -> builtins.list[dict]:
+    def list(self, since_seconds: float | None = None) -> builtins.list[dict]:
+        query = "SELECT * FROM jobs"
+        params: list[Any] = []
+        if since_seconds is not None:
+            cutoff = time.time() - since_seconds
+            query += " WHERE created_at >= ? OR created_at IS NULL"
+            params.append(cutoff)
+        query += " ORDER BY rowid"
         return [
             dict(row) | {"job": json.loads(row["job"])}
-            for row in self.db.execute("SELECT * FROM jobs ORDER BY rowid")
+            for row in self.db.execute(query, params)
         ]
 
     def update(self, id: str, **values: Any) -> None:
-        if set(values) - {"status", "artifact_id", "error", "renamed", "remote_status"}:
+        if set(values) - {"status", "artifact_id", "error", "renamed", "remote_status", "created_at"}:
             raise ValueError("invalid journal field")
         self.db.execute(
             "UPDATE jobs SET " + ",".join(k + "=?" for k in values) + " WHERE id=?",
@@ -306,19 +396,20 @@ class Store:
                 raise ValueError("job id already exists with different content")
         if dry_run:
             return [{"id": j["id"], "job": j, "status": "dry_run"} for j in jobs]
+        now = time.time()
         with self.db:
             for j in jobs:
                 if j["id"] in existing:
                     row = existing[j["id"]]
                     if row["status"] in ("uncertain", "failed") and not row.get("artifact_id"):
                         self.db.execute(
-                            "UPDATE jobs SET job=?, status='queued', error=NULL, remote_status=NULL, renamed=0 WHERE id=?",
-                            (json.dumps(j, sort_keys=True), j["id"]),
+                            "UPDATE jobs SET job=?, status='queued', error=NULL, remote_status=NULL, renamed=0, created_at=? WHERE id=?",
+                            (json.dumps(j, sort_keys=True), now, j["id"]),
                         )
                         continue
                 self.db.execute(
-                    "INSERT OR IGNORE INTO jobs(id,job,status) VALUES (?,?,'queued')",
-                    (j["id"], json.dumps(j, sort_keys=True)),
+                    "INSERT OR IGNORE INTO jobs(id,job,status,created_at) VALUES (?,?,'queued',?)",
+                    (j["id"], json.dumps(j, sort_keys=True), now),
                 )
         return self.list()
 
